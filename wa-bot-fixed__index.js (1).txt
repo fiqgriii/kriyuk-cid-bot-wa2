@@ -1,0 +1,30 @@
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const P = require('pino');
+const fs = require('fs');
+const logic = require('./functions/logic');
+
+async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState('./session');
+  const sock = makeWASocket({
+    auth: state,
+    logger: P({ level: 'silent' }),
+    printQRInTerminal: true
+  });
+
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0];
+    if (!msg.message || msg.key.fromMe) return;
+
+    const from = msg.key.remoteJid;
+    const sender = msg.key.participant || msg.key.remoteJid;
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+
+    if (!text) return;
+
+    await logic.handleCommand(sock, from, sender, text.trim());
+  });
+
+  sock.ev.on('creds.update', saveCreds);
+}
+
+startBot();
