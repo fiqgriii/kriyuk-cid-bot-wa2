@@ -1,0 +1,16 @@
+
+const fs = require('fs');
+
+function logActivity(activity) {
+  const timestamp = new Date().toISOString();
+  fs.appendFileSync('./db/logs.txt', `[${timestamp}] ${activity}\n`);
+}
+
+function formatProduct(code, product, stock) {
+  return \`Kode: \${code}\nNama: \${product.nama}\nDeskripsi: \${product.deskripsi}\nStok: \${stock?.length || 0}\nHarga: \${product.harga} WL\n\`;
+}
+
+module.exports = {
+  logActivity,
+  formatProduct
+};
