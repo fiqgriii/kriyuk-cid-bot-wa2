@@ -1,0 +1,98 @@
+const fs = require('fs');
+
+const users = require('../db/user.json');
+const products = require('../db/product.json');
+const stock = require('../db/stock.json');
+
+function save(file, data) {
+  fs.writeFileSync(`./db/${file}.json`, JSON.stringify(data, null, 2));
+}
+
+function getUser(jid) {
+  if (!users[jid]) {
+    users[jid] = { balance: 0, used: 0, count: 0 };
+    save('user', users);
+  }
+  return users[jid];
+}
+
+async function handleCommand(sock, from, sender, text) {
+  const args = text.split(' ');
+  const cmd = args[0].toLowerCase();
+  const isOwner = sender.includes('628'); // Ganti sesuai nomor kamu
+
+  switch (cmd) {
+    case '.menu':
+      return sock.sendMessage(from, { text: 'Menu: .list, .buy, .profile, .+bal, .-bal' });
+
+    case '.list': {
+      let out = '📦 Produk:
+
+';
+      for (let kode in products) {
+        const p = products[kode];
+        out += `Kode: ${kode}
+Nama: ${p.nama}
+Harga: ${p.harga} WL
+Stok: ${stock[kode]?.length || 0}
+
+`;
+      }
+      return sock.sendMessage(from, { text: out });
+    }
+
+    case '.profile': {
+      const u = getUser(sender);
+      return sock.sendMessage(from, { text: `Saldo: ${u.balance} WL
+Beli: ${u.count} produk
+Terpakai: ${u.used} WL` });
+    }
+
+    case '.+bal': {
+      if (!isOwner) return;
+      const no = args[1];
+      const jumlah = parseInt(args[2]);
+      const u = getUser(no);
+      u.balance += jumlah;
+      save('user', users);
+      return sock.sendMessage(from, { text: `Saldo ${no} ditambah ${jumlah} WL` });
+    }
+
+    case '.-bal': {
+      if (!isOwner) return;
+      const no = args[1];
+      const jumlah = parseInt(args[2]);
+      const u = getUser(no);
+      u.balance -= jumlah;
+      save('user', users);
+      return sock.sendMessage(from, { text: `Saldo ${no} dikurangi ${jumlah} WL` });
+    }
+
+    case '.buy': {
+      const kode = args[1];
+      const jumlah = parseInt(args[2]);
+      const user = getUser(sender);
+
+      if (!kode || !jumlah) return sock.sendMessage(from, { text: 'Contoh: .buy C1 2' });
+      if (!products[kode]) return sock.sendMessage(from, { text: 'Produk tidak ditemukan' });
+      if ((stock[kode]?.length || 0) < jumlah) return sock.sendMessage(from, { text: 'Stok tidak cukup' });
+
+      const total = jumlah * products[kode].harga;
+      if (user.balance < total) return sock.sendMessage(from, { text: 'Saldo kurang' });
+
+      const kirim = stock[kode].splice(0, jumlah).join('\n');
+      user.balance -= total;
+      user.used += total;
+      user.count += jumlah;
+
+      save('stock', stock);
+      save('user', users);
+
+      await sock.sendMessage(sender, { text: `🎁 Produk kamu:
+${kirim}` });
+      return sock.sendMessage(from, { text: '✅ Produk dikirim ke chat pribadi' });
+    }
+  }
+}
+
+module.exports = { handleCommand };
